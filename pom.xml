@@ -86,6 +86,8 @@
 		<module>csparql-sparql-sesame</module>
 		<module>csparql-core</module>
 		<module>csparql-ui</module>
+		<module>csparql-reason</module>
+		<module>kale</module>
 	</modules>
 
 	<dependencyManagement>
@@ -238,8 +240,8 @@
 					<artifactId>maven-compiler-plugin</artifactId>
 					<version>3.1</version>
 					<configuration>
-						<source>1.7</source>
-						<target>1.7</target>
+						<source>8</source>
+						<target>8</target>
 					</configuration>
 				</plugin>
 				<plugin>

@@ -38,19 +38,14 @@
  */
 package eu.larkc.csparql.core.old_parser;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.regex.Pattern;
-
 import org.antlr.runtime.Token;
 import org.antlr.runtime.tree.ParseTree;
 import org.antlr.runtime.tree.Tree;
 
-import com.sun.org.apache.xerces.internal.impl.xs.identity.Selector.Matcher;
-
-import sun.misc.Regexp;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * @author Marco

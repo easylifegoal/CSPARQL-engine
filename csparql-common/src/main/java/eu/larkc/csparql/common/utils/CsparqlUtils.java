@@ -46,6 +46,7 @@ import com.hp.hpl.jena.util.FileManager;
 public class CsparqlUtils {
 	
 	public static String serializeRDFFile(String filePath) throws Exception{
+		System.out.println("file path is " + filePath);
 		File f = new File(filePath);
 		Model m = ModelFactory.createDefaultModel();
 		try{

@@ -35,15 +35,12 @@
 package eu.larkc.csparql.core.engine;
 
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.StringReader;
 import java.text.ParseException;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Observable;
-import java.util.Observer;
+import java.time.Duration;
+import java.time.LocalTime;
+import java.util.*;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +67,7 @@ import eu.larkc.csparql.core.streams.formats.CSparqlQuery;
 import eu.larkc.csparql.core.streams.formats.TranslationException;
 import eu.larkc.csparql.sparql.api.SparqlEngine;
 import eu.larkc.csparql.sparql.jena.JenaEngine;
+import reasoning.Reasoning;
 
 public class CsparqlEngineImpl implements Observer, CsparqlEngine {
 
@@ -81,7 +79,10 @@ public class CsparqlEngineImpl implements Observer, CsparqlEngine {
 	private CepEngine cepEngine = null;
 	private SparqlEngine sparqlEngine = null;
 	private Reasoner reasoner = null;
-
+	private Reasoning reasoning;  
+	private boolean excTrans = false;
+	private long avgTime;
+	private long sumTime;
 	protected final Logger logger = LoggerFactory.getLogger(CsparqlEngineImpl.class);
 
 	public Collection<CSparqlQuery> getAllQueries() {
@@ -89,7 +90,6 @@ public class CsparqlEngineImpl implements Observer, CsparqlEngine {
 	}
 
 	public void initialize() {
-
 		this.configuration = Configuration.getCurrentConfiguration();
 		this.queries = new ArrayList<CSparqlQuery>();
 		this.streams = new HashMap<String, RdfStream>();
@@ -102,7 +102,6 @@ public class CsparqlEngineImpl implements Observer, CsparqlEngine {
 		this.sparqlEngine.initialize();
 		this.setPerformTimestampFunctionVariable(false);
 		this.setUpInjecter(0);
-
 	}
 
 	public void initialize(int queueDimension) {
@@ -148,6 +147,26 @@ public class CsparqlEngineImpl implements Observer, CsparqlEngine {
 		this.sparqlEngine.initialize();
 		this.setPerformTimestampFunctionVariable(performTimestampFunction);
 		this.setUpInjecter(queueDimension);
+	}
+
+	public void initializeWithTrans(String fnMatrixE, String fnMatrixR, String fnTrainTriples, String fnEntities, 
+									String fnRelations, String fnRules, int factors) throws IOException {
+		this.configuration = Configuration.getCurrentConfiguration();
+		this.queries = new ArrayList<>();
+		this.streams = new HashMap<>();
+		this.snapshots = new HashMap<>();
+		this.results = new HashMap<>();
+		this.sparqlEngine = this.configuration.createSparqlEngine();
+		this.cepEngine = this.configuration.createCepEngine();
+		this.reasoner = this.configuration.createReasoner();
+		this.cepEngine.initialize();
+		this.sparqlEngine.initialize();
+		this.setPerformTimestampFunctionVariable(false);
+		this.setUpInjecter(0);
+		this.reasoning = new Reasoning(fnMatrixE, fnMatrixR, fnTrainTriples, 
+				fnEntities, fnRelations, fnRules, factors);
+		this.reasoning.readData();
+		this.excTrans = true;
 	}
 
 	public void setPerformTimestampFunctionVariable(boolean value) {
@@ -615,6 +634,7 @@ public class CsparqlEngineImpl implements Observer, CsparqlEngine {
 		List<RdfQuadruple> quads = (List<RdfQuadruple>) arg;
 
 		logger.debug("current time: {}", this.cepEngine.getCurrentTime());
+		logger.debug("triples size is {}", quads.size());
 //		for (final RdfQuadruple q : quads) {
 //			//logger.debug(q.getSubject() + "\t" + q.getPredicate() + "\t" + q.getObject() + "\t" + (q.getTimestamp()));
 //			logger.debug(q.getTimestamp()+"");
@@ -630,18 +650,60 @@ public class CsparqlEngineImpl implements Observer, CsparqlEngine {
 
 		long count = 0;
 
-		for (final RdfQuadruple q : quads) {
-			if (isStreamUsedInQuery(csparqlquery, q.getStreamName())) {
-				this.sparqlEngine.addStatement(q.getSubject(), q.getPredicate(), q.getObject(), q.getTimestamp());
-				count++;
+		LocalTime start = LocalTime.now();
+		if (!this.excTrans) {
+			for (final RdfQuadruple q : quads) {
+				if (isStreamUsedInQuery(csparqlquery, q.getStreamName())) {
+					this.sparqlEngine.addStatement(q.getSubject(), q.getPredicate(), q.getObject(), q.getTimestamp());
+					count++;
+				}
 			}
+		} else {
+			List<int[]> testList = new ArrayList<>();
+			Map<String, Integer> entity2idx = reasoning.getEntity2Idx();
+			Map<Integer, String> idx2entity = reasoning.getIdx2Entity();
+			Map<String, Integer> relation2idx = reasoning.getRelation2Idx();
+			Map<Integer, String> idx2relation = reasoning.getIdx2Relation();
+			Map<Integer, List<Set<Integer>>> streamMap = new HashMap<>();
+			for (final RdfQuadruple q : quads) {
+				if (isStreamUsedInQuery(csparqlquery, q.getStreamName())) {
+					this.sparqlEngine.addStatement(q.getSubject(), q.getPredicate(), q.getObject(), q.getTimestamp());
+					int subjectId = entity2idx.get(q.getSubject());
+					int relationId = relation2idx.get(q.getPredicate());
+					int objectId = entity2idx.get(q.getObject());
+//					testList.add(new int[]{subjectId, relationId, objectId});
+						List<Set<Integer>> temp = streamMap.computeIfAbsent(relationId, k -> new ArrayList<>());
+						if (temp.size() == 0) {
+							Set<Integer> index1 = new HashSet<>();
+							temp.add(index1);
+							Set<Integer> index2 = new HashSet<>();
+							temp.add(index2);
+						}
+						temp.get(0).add(subjectId);
+						temp.get(1).add(objectId);
+					count++;
+				}
+			}
+			List<int[]> result = reasoning.calc4StreamByMap(streamMap);
+			logger.info("reasoning sum is {}", result.size());
+			for (int[] triple : result) {
+				this.sparqlEngine.addStatement(idx2entity.get(triple[0]), idx2relation.get(triple[1]),
+						idx2entity.get(triple[2]));
+			}
+			LocalTime end = LocalTime.now();
+			logger.info("reasoning time is {}ms", Duration.between(start, end).toMillis());
 		}
 
-		if (count == 0)
-			return;
-
-		final RDFTable result = this.sparqlEngine.evaluateQuery(csparqlquery.getSparqlQuery());
-
+		if (count == 0) return;
+		
+		RDFTable result = this.sparqlEngine.evaluateQuery(csparqlquery.getSparqlQuery());
+		long total = Duration.between(start, LocalTime.now()).toMillis();
+		logger.info("total time is {}ms", total);
+		if (quads.size() == 64000) {
+			sumTime += total;
+			avgTime++;
+			logger.info("avg time is {}ms", sumTime / avgTime);
+		}
 		// timestamp(result, csparqlquery);
 
 		// logger.info("results obtained in "+ (System.nanoTime()-starttime) +

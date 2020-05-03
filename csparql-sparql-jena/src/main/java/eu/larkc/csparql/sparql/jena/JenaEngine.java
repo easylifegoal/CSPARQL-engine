@@ -168,7 +168,6 @@ public class JenaEngine implements SparqlEngine {
 		timestamps.clear();
 	}
 
-
 	public RDFTable evaluateQuery(final SparqlQuery query) {
 
 		long startTS = System.currentTimeMillis();
@@ -305,7 +304,7 @@ public class JenaEngine implements SparqlEngine {
 			table = new RDFTable("Subject", "Predicate", "Object");
 
 			StringWriter w = new StringWriter();
-			m.write(w,"JSON-LD");
+			m.write(w,"RDF/JSON");
 			table.setJsonSerialization(w.toString());
 
 			StmtIterator it = m.listStatements();

@@ -21,3 +21,5 @@ mvn-install-csparql
 # output related files
 bin
 target
+/csparql-reason/src/main/resources/dataset/
+/kale/src/main/resources/dataset/

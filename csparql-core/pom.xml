@@ -91,5 +91,10 @@
 			<artifactId>csparql-sparql-sesame</artifactId>
 			<version>${project.version}</version>
 		</dependency>
+		<dependency>
+			<groupId>eu.larkc.csparql</groupId>
+			<artifactId>kale</artifactId>
+			<version>0.9.7</version>
+		</dependency>
 	</dependencies>
 </project>
